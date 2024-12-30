@@ -82,8 +82,6 @@ public:
 };
 
 int main() {
-
-
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
 	signal(SIGSEGV, signal_handler);
@@ -92,12 +90,19 @@ int main() {
     OkAndDriver driver(hwif);
     driver.init_driver();
 
-    uint16_t res = driver.okand(65535, 60303);
-    printf("%d\n", res);
-<<<<<<< HEAD
+    for(uint16_t i = 0;;i++) {
+        printf("i %d\n", i);
+        for(uint16_t j = 0;;j++) {
+            uint16_t res = driver.okand(i,j);
+            if ((i&j) != res) {
+                printf("%d & %d = %d (exp %d)\n", i, j, res, i&j);
+                return 1;
+            }
+            if (j == 65535) break;
+        }
+        if (i == 65535) break;
+    }
 
-=======
     driver.cleanup();
->>>>>>> 1a28206185bad571c8dab85118e227b70d649005
     return 0;
 }

@@ -5,6 +5,7 @@
 #include <queue>
 #include <thread>
 #include <condition_variable>
+#include <unistd.h>
 
 class HwIface {
 public:
@@ -12,6 +13,7 @@ public:
     virtual void set_pc_data(int) = 0;
     virtual void set_pc_valid(int) = 0;
     virtual void set_pc_clk(int) = 0;
+    virtual void set_pc_rst(int) = 0;
     virtual int get_fpga_valid() = 0;
     virtual int get_fpga_data() = 0;
 };
@@ -40,8 +42,19 @@ public:
     }
     
     void dev_loop() {
+        _hw_if.set_pc_clk(0);
         _hw_if.set_pc_data(0);
         _hw_if.set_pc_valid(0);
+
+	usleep(1);
+
+        _hw_if.set_pc_rst(1);
+        _hw_if.set_pc_clk(1);
+        _hw_if.set_pc_clk(0);
+
+	usleep(1);
+        
+	_hw_if.set_pc_rst(0);
 
         uint16_t input_cnt = 0;
         uint16_t res_cnt = 0;
@@ -53,6 +66,8 @@ public:
     
         QueueRequest uoqr;
         QueueRequest *oqr = nullptr;
+
+	int compute_delay_cycles = 0;
     
         while(true) {
     
@@ -60,8 +75,8 @@ public:
                 std::lock_guard<std::mutex> lock(queue_mtx);
                 if (iqr == nullptr && !request_queue.empty() && input_cnt == 0) {
                     uiqr = request_queue.front();
-                    request_queue.pop();
                     iqr = &uiqr;
+                    request_queue.pop();
                 }
             }
     
@@ -78,11 +93,10 @@ public:
     
                 if (input_cnt == 32) {
                     input_cnt = 0;
-    
                     uoqr = uiqr;
                     oqr = &uoqr;
-    
                     iqr = nullptr;
+		    compute_delay_cycles = 0;
                 }
             } else {
                 _hw_if.set_pc_valid(0);
@@ -91,6 +105,26 @@ public:
             _hw_if.set_pc_clk(1);
     
             if (_hw_if.get_fpga_valid()) {
+		if (oqr == nullptr) {
+			printf("Unexpected output detected\n");
+			// Issue: we're getting output without expecting it. Put this at the top of the queue and reset
+        		_hw_if.set_pc_clk(0);
+        		_hw_if.set_pc_data(0);
+        		_hw_if.set_pc_valid(0);
+			usleep(1);
+        		_hw_if.set_pc_rst(1);
+        		_hw_if.set_pc_clk(1);
+			usleep(1);
+        		_hw_if.set_pc_rst(0);
+        		_hw_if.set_pc_clk(0);
+			usleep(1);
+			input_cnt = 0;
+			res_cnt = 0;
+			result = 0;
+		    	compute_delay_cycles = 0;
+			continue;
+		}
+
                 result = result | (_hw_if.get_fpga_data() << res_cnt);
                 res_cnt++;
     
@@ -109,6 +143,30 @@ public:
                     result = 0;
                 }
             } else {
+		if (oqr != nullptr) {
+			if (compute_delay_cycles == 2) {
+			printf("Expected output not detected\n");
+			// Issue: we're getting output without expecting it. Put this at the top of the queue and reset
+        		_hw_if.set_pc_clk(0);
+        		_hw_if.set_pc_data(0);
+        		_hw_if.set_pc_valid(0);
+			usleep(1);
+        		_hw_if.set_pc_rst(1);
+        		_hw_if.set_pc_clk(1);
+			usleep(1);
+        		_hw_if.set_pc_rst(0);
+        		_hw_if.set_pc_clk(0);
+			usleep(1);
+			input_cnt = 0;
+			res_cnt = 0;
+			result = 0;
+		    	compute_delay_cycles = 0;
+			uiqr = uoqr;
+			iqr = &uiqr;
+			oqr = nullptr;
+			continue; }
+else {compute_delay_cycles += 1;}
+		}
                 res_cnt = 0;
                 result = 0;
             }

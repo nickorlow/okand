@@ -41,8 +41,7 @@ public:
     }
 
     ~RPIHwIface() {
-        std::lock_guard<std::mutex> lg(mtx);
-        gpioTerminate();
+	cleanup();
     }
 
     void set_pc_data(int val) {
@@ -75,6 +74,11 @@ public:
         std::lock_guard<std::mutex> lg(mtx);
         return gpioRead(FPGA_DATA_PIN);
     }
+
+    void cleanup() {
+        std::lock_guard<std::mutex> lg(mtx);
+        gpioTerminate();
+    }
 };
 
 int main() {
@@ -90,6 +94,10 @@ int main() {
 
     uint16_t res = driver.okand(65535, 60303);
     printf("%d\n", res);
+<<<<<<< HEAD
 
+=======
+    driver.cleanup();
+>>>>>>> 1a28206185bad571c8dab85118e227b70d649005
     return 0;
 }

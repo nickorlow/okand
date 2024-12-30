@@ -16,6 +16,7 @@ public:
     virtual void set_pc_rst(int) = 0;
     virtual int get_fpga_valid() = 0;
     virtual int get_fpga_data() = 0;
+    virtual void cleanup() = 0;
 };
 
 class QueueRequest {
@@ -200,5 +201,9 @@ else {compute_delay_cycles += 1;}
         qr.cv->wait(lk, [&qr] {return *qr.wb;});
     
         return res;
+    }
+
+    void cleanup() {
+        _hw_if.cleanup();
     }
 };

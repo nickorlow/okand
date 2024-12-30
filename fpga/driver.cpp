@@ -76,23 +76,6 @@ void dev_loop() {
         dut->pc_clk = 1;
         dut->eval();
 
-        if (dut->fpga_valid) {
-            result = result | (dut->fpga_data << res_cnt);
-            res_cnt++;
-            printf("rescnti %d\n", res_cnt);
-
-            if (res_cnt == 16 && oqr != nullptr) {
-                *oqr->res_ptr = result;
-                res_cnt = 0;
-                result = 0;
-                oqr->cv->notify_one();
-                oqr = nullptr;
-                printf("stronger\n");
-            } else if (res_cnt == 16) {
-                printf("rescnt of\n");
-                res_cnt = 0;
-            }
-        }
 
         dut->pc_clk = 0;
         dut->eval();

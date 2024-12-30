@@ -1,0 +1,29 @@
+{
+	"partitions" : [
+		{
+			"name" : "Top",
+			"pins" : [
+				{
+					"name" : "fpga_data",
+					"strict" : false
+				},
+				{
+					"name" : "fpga_valid",
+					"strict" : false
+				},
+				{
+					"name" : "pc_clk",
+					"strict" : false
+				},
+				{
+					"name" : "pc_data",
+					"strict" : false
+				},
+				{
+					"name" : "pc_valid",
+					"strict" : false
+				}
+			]
+		}
+	]
+}

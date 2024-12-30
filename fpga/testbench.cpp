@@ -7,10 +7,11 @@
 
 class VerilogHwIface : public HwIface {
     Vokand *_dut;
+    VerilatedContext *_contextp;
 public:
     VerilogHwIface() {
-        VerilatedContext *contextp = new VerilatedContext;
-        _dut = new Vokand{contextp}; 
+        _contextp = new VerilatedContext;
+        _dut = new Vokand{_contextp}; 
     }
 
     void set_pc_data(int val) {
@@ -27,6 +28,11 @@ public:
         _dut->pc_clk = val;
         _dut->eval();
     }
+    
+    void set_pc_rst(int val) {
+        _dut->pc_rst = val;
+        _dut->eval();
+    }
 
     int get_fpga_valid() {
         return _dut->fpga_valid;
@@ -34,6 +40,11 @@ public:
 
     int get_fpga_data() {
         return _dut->fpga_data;
+    }
+
+    void cleanup() {
+        delete _dut;
+        delete _contextp;
     }
 };
 

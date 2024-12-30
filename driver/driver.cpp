@@ -2,7 +2,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include <mutex>
-#include <queue>
+#include <deque>
 #include <thread>
 #include <condition_variable>
 #include <unistd.h>
@@ -30,9 +30,24 @@ public:
 };
 
 class OkAndDriver {
-    std::queue<QueueRequest> request_queue;
+    std::deque<QueueRequest> request_queue;
     std::mutex queue_mtx;
     class HwIface &_hw_if;
+        
+    uint16_t input_cnt;
+    uint16_t res_cnt;
+    uint16_t result;
+    
+    QueueRequest uiqr;
+    QueueRequest *iqr;
+    
+    QueueRequest uoqr;
+    QueueRequest *oqr;
+
+	int compute_delay_cycles = 0;
+
+    int error_counter_ui = 0;
+    int error_counter_uo = 0;
 
 public:
     OkAndDriver(class HwIface &hw_if) :_hw_if (hw_if) {}
@@ -41,43 +56,54 @@ public:
         std::thread t1(&OkAndDriver::dev_loop, this);
         t1.detach();
     }
-    
-    void dev_loop() {
+
+    void reset_fpga() {
+        // Zero out 
         _hw_if.set_pc_clk(0);
         _hw_if.set_pc_data(0);
         _hw_if.set_pc_valid(0);
+		usleep(1);
 
-	usleep(1);
-
+        // Cycle with RST on
         _hw_if.set_pc_rst(1);
         _hw_if.set_pc_clk(1);
+		usleep(1);
+
+        // Re-zero
+        _hw_if.set_pc_rst(0);
         _hw_if.set_pc_clk(0);
+		usleep(1);
 
-	usleep(1);
-        
-	_hw_if.set_pc_rst(0);
+        // Reset state on our end
+		input_cnt = 0;
+		res_cnt = 0;
+		result = 0;
+		compute_delay_cycles = 0;
 
-        uint16_t input_cnt = 0;
-        uint16_t res_cnt = 0;
-        uint16_t result = 0;;
-    
-    
-        QueueRequest uiqr;
-        QueueRequest *iqr = nullptr;
-    
-        QueueRequest uoqr;
-        QueueRequest *oqr = nullptr;
+        if (iqr != nullptr) {
+            std::lock_guard<std::mutex> lock(queue_mtx);
+            request_queue.push_front(uiqr);
+        }
 
-	int compute_delay_cycles = 0;
+        if (oqr != nullptr) {
+		    uiqr = uoqr;
+		    iqr = &uiqr;
+		    oqr = nullptr;
+        } else {
+            iqr = nullptr;
+        }
+    }
     
+    void dev_loop() {
+        reset_fpga();
+
         while(true) {
-    
             {
                 std::lock_guard<std::mutex> lock(queue_mtx);
                 if (iqr == nullptr && !request_queue.empty() && input_cnt == 0) {
                     uiqr = request_queue.front();
                     iqr = &uiqr;
-                    request_queue.pop();
+                    request_queue.pop_front();
                 }
             }
     
@@ -97,7 +123,7 @@ public:
                     uoqr = uiqr;
                     oqr = &uoqr;
                     iqr = nullptr;
-		    compute_delay_cycles = 0;
+		            compute_delay_cycles = 0;
                 }
             } else {
                 _hw_if.set_pc_valid(0);
@@ -106,25 +132,11 @@ public:
             _hw_if.set_pc_clk(1);
     
             if (_hw_if.get_fpga_valid()) {
-		if (oqr == nullptr) {
-			printf("Unexpected output detected\n");
-			// Issue: we're getting output without expecting it. Put this at the top of the queue and reset
-        		_hw_if.set_pc_clk(0);
-        		_hw_if.set_pc_data(0);
-        		_hw_if.set_pc_valid(0);
-			usleep(1);
-        		_hw_if.set_pc_rst(1);
-        		_hw_if.set_pc_clk(1);
-			usleep(1);
-        		_hw_if.set_pc_rst(0);
-        		_hw_if.set_pc_clk(0);
-			usleep(1);
-			input_cnt = 0;
-			res_cnt = 0;
-			result = 0;
-		    	compute_delay_cycles = 0;
-			continue;
-		}
+		        if (oqr == nullptr) {
+                    reset_fpga();
+                    error_counter_uo++;
+		        	continue;
+		        }
 
                 result = result | (_hw_if.get_fpga_data() << res_cnt);
                 res_cnt++;
@@ -144,30 +156,15 @@ public:
                     result = 0;
                 }
             } else {
-		if (oqr != nullptr) {
-			if (compute_delay_cycles == 2) {
-			printf("Expected output not detected\n");
-			// Issue: we're getting output without expecting it. Put this at the top of the queue and reset
-        		_hw_if.set_pc_clk(0);
-        		_hw_if.set_pc_data(0);
-        		_hw_if.set_pc_valid(0);
-			usleep(1);
-        		_hw_if.set_pc_rst(1);
-        		_hw_if.set_pc_clk(1);
-			usleep(1);
-        		_hw_if.set_pc_rst(0);
-        		_hw_if.set_pc_clk(0);
-			usleep(1);
-			input_cnt = 0;
-			res_cnt = 0;
-			result = 0;
-		    	compute_delay_cycles = 0;
-			uiqr = uoqr;
-			iqr = &uiqr;
-			oqr = nullptr;
-			continue; }
-else {compute_delay_cycles += 1;}
-		}
+		        if (oqr != nullptr) {
+			        if (compute_delay_cycles == 2) {
+                        reset_fpga();
+                        error_counter_ui++;
+                        continue;
+                    } else {
+                        compute_delay_cycles += 1;
+                    }
+		        }
                 res_cnt = 0;
                 result = 0;
             }
@@ -194,7 +191,7 @@ else {compute_delay_cycles += 1;}
     
         {
             std::lock_guard<std::mutex> lock(queue_mtx);
-            request_queue.push(qr);
+            request_queue.push_back(qr);
         }
     
         std::unique_lock<std::mutex> lk(mtx);

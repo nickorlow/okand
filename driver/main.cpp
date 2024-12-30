@@ -11,6 +11,7 @@ class RPIHwIface : public HwIface {
 
 public:
     RPIHwIface() {
+        gpioCfgSetInternals(1<<10);
         gpioInitialise();
         gpioSetMode(PC_CLK_PIN, PI_OUTPUT);
         gpioSetMode(PC_VALID_PIN, PI_OUTPUT);

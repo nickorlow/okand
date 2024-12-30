@@ -22,7 +22,7 @@ public:
     }
 
     ~RPIHwIface() {
-        gpioTerminate();
+        cleanup();
     }
 
     void set_pc_data(int val) {
@@ -44,6 +44,10 @@ public:
     int get_fpga_data() {
         return gpioRead(FPGA_DATA_PIN);
     }
+
+    void cleanup() {
+        gpioTerminate();
+    }
 };
 
 int main() {
@@ -53,5 +57,6 @@ int main() {
 
     uint16_t res = driver.okand(65535, 60303);
     printf("%d\n", res);
+    driver.cleanup();
     return 0;
 }

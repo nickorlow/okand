@@ -20,6 +20,10 @@ public:
         gpioSetMode(FPGA_DATA_PIN, PI_INPUT);
     }
 
+    ~RPIHwIface() {
+        gpioTerminate();
+    }
+
     void set_pc_data(int val) {
         gpioWrite(PC_DATA_PIN, val);
     }

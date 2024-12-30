@@ -106,7 +106,11 @@ public:
                     oqr = nullptr;
                 } else if (res_cnt == 16) {
                     res_cnt = 0;
+                    result = 0;
                 }
+            } else {
+                res_cnt = 0;
+                result = 0;
             }
     
             _hw_if.set_pc_clk(0);
